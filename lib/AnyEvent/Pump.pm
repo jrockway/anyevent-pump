@@ -23,10 +23,17 @@ sub pump($$){
     $from->push_read($pusher);
 
     return guard {
-        # remove this pusher from the queue.
-        $from->{_queue} = [
-            grep { refaddr $pusher != refaddr $_ } @{$from->{_queue} || []}
-        ];
+        if($from->isa('AnyEvent::Handle')){
+            $from->{_queue} = [
+                grep { refaddr $_ != refaddr $pusher } @{$from->{_queue} || []}
+            ];
+        }
+        elsif($from->can('kill_reader')){
+            $from->kill_reader($pusher);
+        }
+        else {
+            warn "Can't properly destroy $from: don't know how to shift watchers.";
+        }
     } if defined wantarray;
 
     return;

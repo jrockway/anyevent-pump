@@ -31,11 +31,18 @@ $out->push_read( line => sub { $done->($_[1]) } );
 $in->push_write('hello');
 $in->push_write(' ');
 
-pump $from, $to;
+ok !$from->{_queue}, 'nothing in the queue yet';
+
+my $pump = pump $from, $to;
+
+is scalar @{$from->{_queue}}, 1, 'pump is in the queue';
 
 $in->push_write('world');
 $in->push_write("\n");
 
 is $done->recv, 'hello world', 'pumped those pipes';
+
+undef $pump;
+is scalar @{$from->{_queue}}, 0, 'pump went away';
 
 done_testing;
