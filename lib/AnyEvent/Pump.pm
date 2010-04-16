@@ -9,21 +9,27 @@ use Sub::Exporter -setup => {
     exports => ['pump'],
 };
 
-sub pump($$){
-    my ($from, $to) = @_;
-    my $pusher; $pusher = sub {
-        my $h = shift;
-        my $data = delete $h->{rbuf};
-        return 0 unless $data;
+sub pump($$;&){
+    my ($from, $to, $filter) = @_;
+    my $from_is_ah = $from->isa('AnyEvent::Handle');
+    $filter ||= sub { $_[0] }; # identity function
 
-        $to->push_write($data);
-        $from->push_read($pusher);
+    my $pusher; $pusher = sub {
+        my $_from = shift;
+        my $data = $from_is_ah ? delete $_from->{rbuf} : $_from->consume;
+        return 0 unless defined $data;
+
+        my $filtered = $filter->($data);
+        return 0 unless defined $filtered;
+
+        $to->push_write($filtered);
+        $_from->push_read($pusher);
         return 1;
     };
     $from->push_read($pusher);
 
     return guard {
-        if($from->isa('AnyEvent::Handle')){
+        if($from_is_ah){
             $from->{_queue} = [
                 grep { refaddr $_ != refaddr $pusher } @{$from->{_queue} || []}
             ];
