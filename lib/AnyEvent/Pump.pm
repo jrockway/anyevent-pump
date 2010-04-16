@@ -11,12 +11,15 @@ use Sub::Exporter -setup => {
 
 sub pump($$;&){
     my ($from, $to, $filter) = @_;
-    my $from_is_ah = $from->isa('AnyEvent::Handle');
     $filter ||= sub { $_[0] }; # identity function
 
     my $pusher; $pusher = sub {
         my $_from = shift;
-        my $data = $from_is_ah ? delete $_from->{rbuf} : $_from->consume;
+
+        my $data = $_from->isa('AnyEvent::Handle')
+          ? delete $_from->{rbuf}
+          : $_from->consume;
+
         return 0 unless defined $data;
 
         my $filtered = $filter->($data);
@@ -29,7 +32,7 @@ sub pump($$;&){
     $from->push_read($pusher);
 
     return guard {
-        if($from_is_ah){
+        if($from->isa('AnyEvent::Handle')){
             $from->{_queue} = [
                 grep { refaddr $_ != refaddr $pusher } @{$from->{_queue} || []}
             ];
